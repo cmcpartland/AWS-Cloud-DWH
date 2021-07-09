@@ -74,3 +74,48 @@ Special note on the `INSERT` query handling:
 4. Run *create_tables.py* to create the tables.
 5. Run *etl.py* to run the ETL pipeline.
   
+  
+## Example Analysis
+Here are some example queries that can be run on the database.  
+
+TOTAL NUMBER OF STREAMS:
+
+    SELECT SUM(songplays.sp_id) FROM songplays
+    
+*Output*:  
+sum  
+56656
+
+STREAMING COUNTS BY ACCOUNT LEVEL:  
+
+    SELECT songplays.sp_level, SUM(songplays.sp_id) 
+                           FROM songplays 
+                           GROUP BY songplays.sp_level
+*Output*:  
+sp_level,sum  
+paid,45819  
+free,10837  
+
+TOP 5 USERS WITH MOST LISTENS 
+
+    SELECT users.u_first_name || ' ' || users.u_last_name u_full_name, SUM(songplays.sp_user_id) 
+                         FROM (songplays JOIN users ON songplays.sp_user_id=users.u_id) 
+                         GROUP BY u_full_name 
+                         ORDER BY SUM(songplays.sp_user_id) DESC LIMIT 5
+
+*Output*:  
+u_full_name sum  
+Kate Harrell	3104  
+Tegan Levine	2480  
+Chloe Cuevas	2058  
+Mohammad Rodriguez	1496  
+Jacob Klein	1314  
+
+TOP 5 STREAMING DAYS OF THE MONTH  
+
+    SELECT time.t_day, SUM(songplays.sp_id) 
+                                FROM (songplays JOIN time ON songplays.sp_start_time=time.t_start_time) 
+                                GROUP BY time.t_day 
+                                ORDER BY SUM(songplays.sp_id) DESC LIMIT 5  
+                                
+*Output*:  
