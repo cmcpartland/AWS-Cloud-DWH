@@ -119,3 +119,9 @@ TOP 5 STREAMING DAYS OF THE MONTH
                                 ORDER BY SUM(songplays.sp_id) DESC LIMIT 5  
                                 
 *Output*:  
+t_day  sum  
+5	5571  
+15	4573  
+29	3750  
+30	3100  
+21	3069  
