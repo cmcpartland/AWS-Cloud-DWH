@@ -46,9 +46,13 @@ def main():
 
     cur = conn.cursor()
 
+    print('Dropping existing tables.')
     drop_tables(cur, conn)
+
+    print('Creating new tables...')
     create_tables(cur, conn)
     print('Tables created!')
+
     conn.close()
 
 

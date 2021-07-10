@@ -1,6 +1,6 @@
 import configparser
 import psycopg2
-from sql_queries import copy_table_queries, insert_table_queries
+from sql_queries import copy_table_queries, insert_table_queries, test_queries
 
 
 def load_staging_tables(cur, conn):
@@ -27,9 +27,24 @@ def insert_tables(cur, conn):
         conn.commit()
 
 
+def test_dwh(cur, conn):
+    """
+    Runs some test queries on the Data Warehouse
+    :param cur: the cursor to the DB connection
+    :param conn: the connection to the DB
+    :return: none
+    """
+    for description, query in test_queries:
+        print(description)
+        cur.execute(query)
+        for row in cur.fetchall():
+            print(row)
+        print('\n')
+
+
 def main():
     """
-    main function. connects to redshift cluster, loads staging tables, then generates analytical tables
+    main function. connects to redshift cluster, loads staging tables, generates analytical tables, and runs test queries
     :return: none
     """
     config = configparser.ConfigParser()
@@ -41,13 +56,19 @@ def main():
     cur = conn.cursor()
 
     # Load data from S3 buckets to staging tables
+    print('Generating staging tables from S3 bucket data...')
     load_staging_tables(cur, conn)
-    print('Data is now staged on Redshift database!')
+    print('Data is now staged on Redshift!')
 
     # Load data from the staging tables to analytical tables
+    print('Filling analytical tables with data from staging tables...')
     insert_tables(cur, conn)
     print('Analytical tables are now on Redshift database!')
 
+    print('Running test queries.')
+    test_dwh(cur, conn)
+
+    print('Closing connection.')
     conn.close()
 
 

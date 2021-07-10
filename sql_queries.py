@@ -111,14 +111,14 @@ CREATE TABLE artists
 time_table_create = ("""
 CREATE TABLE time
 (
-  t_start_time  TIMESTAMP NOT NULL,
+  t_start_time  BIGINT NOT NULL,
   t_hour        SMALLINT NOT NULL,
   t_day         SMALLINT NOT NULL,
   t_week        SMALLINT NOT NULL,
   t_month       SMALLINT NOT NULL,
   t_year        SMALLINT NOT NULL,
   t_weekday     SMALLINT NOT NULL
-);
+) ;
 """)
 
 
@@ -152,8 +152,8 @@ SELECT se.se_ts             AS sp_start_time,
        se.se_session_id     AS sp_session_id,
        se.se_location       AS sp_location,
        se.se_user_agent     AS sp_user_agent
-FROM staging_events se
-JOIN staging_songs ss ON (se.se_artist = ss.artist_name) AND (se.se_song = ss.title)
+FROM staging_events se JOIN staging_songs ss 
+    ON (se.se_artist = ss.artist_name) AND (se.se_song = ss.title)
 WHERE se.se_artist IS NOT NULL AND se.se_song IS NOT NULL
 """)
 
@@ -195,16 +195,45 @@ FROM staging_songs ss
 time_table_insert = ("""
 INSERT INTO time (t_start_time, t_hour, t_day, t_week, t_month, t_year, t_weekday)
 SELECT DISTINCT
-        TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second'     AS t_start_time,
-        EXTRACT(hour from t_start_time)                             AS t_hour,
-        EXTRACT(day from t_start_time)                              AS t_day,
-        EXTRACT(week from t_start_time)                             AS t_week,
-        EXTRACT(month from t_start_time)                            AS t_month,
-        EXTRACT(year from t_start_time)                             AS t_year,
-        EXTRACT(dow from t_start_time)                              AS t_weekday
+        se.se_ts                                                    AS t_start_time,
+        EXTRACT(hour from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_hour,
+        EXTRACT(day from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                           AS t_day,
+        EXTRACT(week from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_week,
+        EXTRACT(month from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                         AS t_month,
+        EXTRACT(year from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_year,
+        EXTRACT(dow from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                           AS t_weekday
 FROM staging_events se
 """)
 
+
+# TEST QUERIES
+total_num_streams = (
+"""
+SELECT SUM(songplays.sp_id) FROM songplays
+""")
+
+streams_by_membership_level = (
+"""
+SELECT songplays.sp_level, SUM(songplays.sp_id) 
+                       FROM songplays 
+                       GROUP BY songplays.sp_level
+""")
+
+users_most_listens = (
+"""
+SELECT users.u_first_name || ' ' || users.u_last_name u_full_name, SUM(songplays.sp_user_id) 
+                     FROM (songplays JOIN users ON songplays.sp_user_id=users.u_id) 
+                     GROUP BY u_full_name 
+                     ORDER BY SUM(songplays.sp_user_id) DESC LIMIT 5
+""")
+
+top_streaming_days_of_month = (
+"""
+SELECT time.t_day, SUM(songplays.sp_id) 
+                            FROM (songplays JOIN time ON songplays.sp_start_time=time.t_start_time) 
+                            GROUP BY time.t_day 
+                            ORDER BY SUM(songplays.sp_id) DESC LIMIT 5  
+""")
 
 # QUERY LISTS
 
@@ -216,3 +245,8 @@ drop_staging_table_queries = [staging_events_table_drop, staging_songs_table_dro
 
 copy_table_queries = [staging_events_copy, staging_songs_copy]
 insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
+
+test_queries = [('Total number of streams', total_num_streams),
+                ('Streams by membership level', streams_by_membership_level),
+                ('Top 5 users with most listens', users_most_listens),
+                ('Top 5 streaming days of the month', top_streaming_days_of_month)]
