@@ -22,24 +22,24 @@ time_table_drop = "DROP TABLE IF EXISTS time"
 staging_events_table_create= ("""
 CREATE TABLE staging_events
 (
-  se_artist        VARCHAR,
-  se_auth          VARCHAR(10),
-  se_first_name    VARCHAR,
-  se_gender        VARCHAR(10),
-  se_itemInSession SMALLINT,
-  se_last_name     VARCHAR,
-  se_length        DECIMAL,
-  se_level         VARCHAR(6),
-  se_location      VARCHAR,
-  se_method        VARCHAR(6),
-  se_page          VARCHAR(20),
-  se_registration  BIGINT,
-  se_session_id    SMALLINT,
-  se_song          VARCHAR,
-  se_status        SMALLINT,
-  se_ts            BIGINT,
-  se_user_agent    VARCHAR,
-  se_user_id       SMALLINT
+  artist        VARCHAR,
+  auth          VARCHAR(10),
+  first_name    VARCHAR,
+  gender        VARCHAR(10),
+  itemInSession SMALLINT,
+  last_name     VARCHAR,
+  length        DECIMAL,
+  level         VARCHAR(6),
+  location      VARCHAR,
+  method        VARCHAR(6),
+  page          VARCHAR(20),
+  registration  BIGINT,
+  session_id    SMALLINT,
+  song          VARCHAR,
+  status        SMALLINT,
+  ts            BIGINT,
+  user_agent    VARCHAR,
+  user_id       SMALLINT
  );
 """)
 
@@ -54,7 +54,7 @@ CREATE TABLE staging_songs
   artist_name      VARCHAR,
   song_id          VARCHAR(25), 
   title            VARCHAR,
-  duration         DOUBLE PRECISION,
+  duration         DECIMAL,
   year             SMALLINT
 );
 """)
@@ -62,15 +62,15 @@ CREATE TABLE staging_songs
 songplay_table_create = ("""
 CREATE TABLE songplays 
 (
-  sp_id         INT IDENTITY(0,1) NOT NULL,
-  sp_start_time VARCHAR(15) NOT NULL,
-  sp_user_id    INTEGER NOT NULL,
-  sp_level      VARCHAR(6) NOT NULL,
-  sp_song_id    VARCHAR(25) NOT NULL,
-  sp_artist_id  VARCHAR(25) NOT NULL,
-  sp_session_id INTEGER NOT NULL,
-  sp_location   VARCHAR,
-  sp_user_agent VARCHAR
+  sp_id            INT IDENTITY(0,1) NOT NULL,
+  sp_start_time    TIMESTAMP NOT NULL,
+  sp_user_id       INTEGER NOT NULL,
+  sp_level         VARCHAR(6) NOT NULL,
+  sp_song_id       VARCHAR(25) NOT NULL,
+  sp_artist_id     VARCHAR(25) NOT NULL,
+  sp_session_id    INTEGER NOT NULL,
+  sp_location      VARCHAR,
+  sp_user_agent    VARCHAR
 );
 """)
 
@@ -111,7 +111,7 @@ CREATE TABLE artists
 time_table_create = ("""
 CREATE TABLE time
 (
-  t_start_time  BIGINT NOT NULL,
+  t_start_time  TIMESTAMP NOT NULL,
   t_hour        SMALLINT NOT NULL,
   t_day         SMALLINT NOT NULL,
   t_week        SMALLINT NOT NULL,
@@ -144,17 +144,17 @@ staging_songs_copy = ("""
 songplay_table_insert = ("""
 INSERT INTO songplays (sp_start_time, sp_user_id, sp_level, sp_song_id, \
                        sp_artist_id, sp_session_id, sp_location, sp_user_agent)
-SELECT se.se_ts             AS sp_start_time,
-       se.se_user_id        AS sp_user_id,
-       se.se_level          AS sp_level,
-       ss.song_id           AS sp_song_id, 
-       ss.artist_id         AS sp_artist_id,
-       se.se_session_id     AS sp_session_id,
-       se.se_location       AS sp_location,
-       se.se_user_agent     AS sp_user_agent
+SELECT TIMESTAMP 'epoch' + se.ts/1000 * interval '1 second' AS sp_start_time,
+       se.user_id        AS sp_user_id,
+       se.level          AS sp_level,
+       ss.song_id        AS sp_song_id, 
+       ss.artist_id      AS sp_artist_id,
+       se.session_id     AS sp_session_id,
+       se.location       AS sp_location,
+       se.user_agent     AS sp_user_agent
 FROM staging_events se JOIN staging_songs ss 
-    ON (se.se_artist = ss.artist_name) AND (se.se_song = ss.title)
-WHERE se.se_artist IS NOT NULL AND se.se_song IS NOT NULL
+    ON (se.artist = ss.artist_name) AND (se.song = ss.title) AND (se.length = ss.duration)
+WHERE se.artist IS NOT NULL AND se.song IS NOT NULL AND se.length IS NOT NULL
 """)
 
 # This insert uses the data from the latest entry for each u_id.
@@ -162,13 +162,13 @@ user_table_insert = ("""
 INSERT INTO users (u_id, u_first_name, u_last_name, u_gender, u_level)
 SELECT u_id, u_first_name, u_last_name, u_gender, u_level
 FROM
-    (SELECT se.se_user_id           AS u_id,
-            se.se_first_name        AS u_first_name,
-            se.se_last_name         AS u_last_name,
-            se.se_gender            AS u_gender,
-            se.se_level             AS u_level,
-            ROW_NUMBER() OVER (PARTITION BY se.se_user_id) AS user_id_ranked
-     FROM staging_events se ORDER BY se.se_user_id) AS ranked
+    (SELECT se.user_id           AS u_id,
+            se.first_name        AS u_first_name,
+            se.last_name         AS u_last_name,
+            se.gender            AS u_gender,
+            se.level             AS u_level,
+            ROW_NUMBER() OVER (PARTITION BY se.user_id) AS user_id_ranked
+     FROM staging_events se ORDER BY se.user_id) AS ranked
 WHERE ranked.user_id_ranked = 1 AND u_id IS NOT NULL;
 """)
 
@@ -195,13 +195,13 @@ FROM staging_songs ss
 time_table_insert = ("""
 INSERT INTO time (t_start_time, t_hour, t_day, t_week, t_month, t_year, t_weekday)
 SELECT DISTINCT
-        se.se_ts                                                    AS t_start_time,
-        EXTRACT(hour from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_hour,
-        EXTRACT(day from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                           AS t_day,
-        EXTRACT(week from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_week,
-        EXTRACT(month from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                         AS t_month,
-        EXTRACT(year from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                          AS t_year,
-        EXTRACT(dow from TIMESTAMP 'epoch' + se.se_ts/1000 * interval '1 second')                           AS t_weekday
+        TIMESTAMP 'epoch' + se.ts/1000 * interval '1 second'     AS t_start_time,
+        EXTRACT(hour from t_start_time)                          AS t_hour,
+        EXTRACT(day from t_start_time)                           AS t_day,
+        EXTRACT(week from t_start_time)                          AS t_week,
+        EXTRACT(month from t_start_time)                         AS t_month,
+        EXTRACT(year from t_start_time)                          AS t_year,
+        EXTRACT(dow from t_start_time)                           AS t_weekday
 FROM staging_events se
 """)
 
@@ -221,18 +221,18 @@ SELECT songplays.sp_level, SUM(songplays.sp_id)
 
 users_most_listens = (
 """
-SELECT users.u_first_name || ' ' || users.u_last_name u_full_name, SUM(songplays.sp_user_id) 
+SELECT users.u_first_name || ' ' || users.u_last_name full_name, SUM(songplays.sp_user_id) 
                      FROM (songplays JOIN users ON songplays.sp_user_id=users.u_id) 
-                     GROUP BY u_full_name 
+                     GROUP BY full_name 
                      ORDER BY SUM(songplays.sp_user_id) DESC LIMIT 5
 """)
 
 top_streaming_days_of_month = (
 """
 SELECT time.t_day, SUM(songplays.sp_id) 
-                            FROM (songplays JOIN time ON songplays.sp_start_time=time.t_start_time) 
-                            GROUP BY time.t_day 
-                            ORDER BY SUM(songplays.sp_id) DESC LIMIT 5  
+    FROM (songplays JOIN time ON songplays.sp_start_time=time.t_start_time) 
+    GROUP BY time.t_day 
+    ORDER BY SUM(songplays.sp_id) DESC LIMIT 5  
 """)
 
 # QUERY LISTS
